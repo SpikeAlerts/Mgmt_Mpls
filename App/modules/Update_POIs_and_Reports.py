@@ -13,7 +13,7 @@ from psycopg2 import sql
 
 ## Workflow
 
-def workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, report_lag, epsg_code):
+def workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, base_config):
     '''
     Runs the full workflow to update our database tables "Places of Interest" and "Reports Archive". 
     This involves the following:
@@ -52,11 +52,11 @@ def workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, report_lag, e
     sensor_id_dict - dictionary used to determine which steps to conduct. Has the following structure:
     
     {'TRUE' : {'new' : set of sensor_ids,
-                     'ongoing' : set of sensor_ids,
-                     'ended' : set of sensor_ids}
+               'ongoing' : set of sensor_ids,
+               'ended' : set of sensor_ids}
       'FALSE' : {'new' : set of sensor_ids,
-                   'ongoing' : set of sensor_ids,
-                   'ended' : set of sensor_ids}
+                 'ongoing' : set of sensor_ids,
+                 'ended' : set of sensor_ids}
       }
                       
          where TRUE = for sensitive populations
@@ -66,19 +66,43 @@ def workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, report_lag, e
     
     runtime - datetime - approximate time that the values for above dataframe were acquired
     
-    report_lag - int - minutes to delay writing a report
+    base_config - dictionary - environment variables
     
-    epsg_code - string - epsg code for local UTM coordinate reference system (for distance calculations)
+    returns a dictionary (poi_id_dict) with the following format:
+     
+              {'TRUE' : {'new' : list of poi_ids,
+                         'ended' : list of tuples of (poi_id, duration_minutes, report_id)}
+              'FALSE' : {'new' : list of poi_ids,
+                         'ended' : list of tuples of (poi_id, duration_minutes, report_id)}
+              }
+                              
+                 where TRUE = for sensitive populations
+                        FALSE = for all populations   
     '''
     
-    # Initialize iterators
+    # Unpack important variables from base_config
     
+    # report_lag - int - minutes to delay writing a report
+    
+    # epsg_code - string - epsg code for local UTM coordinate reference system (for distance calculations)
+    
+    report_lag, epsg_code = base_config['REPORT_LAG'], base_config['EPSG_CODE']
+    
+    # Initialize dictionary to return
+    
+    poi_id_dict = {'TRUE':{'new': [],
+                           'ended': []
+                            },
+                     'FALSE':{'new': [],
+                              'ended': []
+                            }
+                    }
+                    
+    # Initialize iterators
+
     alert_types = ['new', 'ended'] # 'new' or 'ended' alerts (don't update pois if ongoing alert)
     sensitivities = ['FALSE', 'TRUE'] # Matches "sensitive" in database alert tables
                                            # True = alert for sensitive pops, False = alert for all pops
-
-    
-    # Initialize lists to return
     
     # Iterate
     
@@ -92,6 +116,12 @@ def workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, report_lag, e
             # a) New Alerts
             
             if (alert_type == 'new') and (len(sensor_ids) > 0):
+            
+                # Get poi_ids to send a new alert
+                
+                if base_config['USERS'] == 'y': # We only need to do this semi-intensive query if we have users
+                
+                    poi_id_dict[is_sensitive]['new'] = poi_query.Get_newly_alerted_pois(list(sensor_ids), is_sensitive, epsg_code)
             
                 # Update the active_alerts
                 
@@ -132,9 +162,11 @@ def workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, report_lag, e
             
                 start_time, duration_minutes, report_id = Initialize_report(poi_id, reports_for_day, runtime, is_sensitive)
                 
-                new_reports += [(start_time, duration_minutes, is_sensitive, report_id)]
+                new_reports += [(poi_id, duration_minutes, report_id)]
                 
                 reports_for_day += 1 
+                
+            poi_id_dict[is_sensitive]['ended'] = new_reports # Save for notifications
                 
             # Update reports for day
             
@@ -143,6 +175,8 @@ def workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, report_lag, e
             # Clear the cached alerts
             
             Clear_cached_alerts(poi_ids_to_end_alert, is_sensitive)
+            
+    return poi_id_dict
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

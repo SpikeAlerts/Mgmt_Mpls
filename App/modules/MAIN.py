@@ -34,29 +34,24 @@ sensor_id_dict is used to inform the next step:
 
                     This returns a dictionary with the following format:
                     
-                              poi_id_dict = 
-                              {'TRUE' : {'new' : list of poi_ids,
-                                         'ended' : list of tuples of (poi_id, duration_minutes, report_id)}
-                              'FALSE' : {'new' : list of poi_ids,
-                                         'ended' : list of tuples of (poi_id, duration_minutes, report_id)}
+                            reports_dict =
+                              {
+                              'TRUE' : list of tuples of (poi_id, report_id)
+                              'FALSE' : list of tuples of (poi_id, report_id)
                               }
                                               
                                  where TRUE = for sensitive populations
                                         FALSE = for all populations   
                                         
-poi_id_dict is used to inform the next step:
+reports_dict is used to inform the next step:
 
-If the environment variable 'USERS' is set to 'y' then we will do steps 5-6
+If the environment variable 'USERS' is set to 'y' then we will do step 5
                      
-# 5 = Update_Users_and_Compose_Messages - NOT DONE - Updates the Users table and composes messages.
+# 5 = Notify_and_Update_Users - NOT DONE - Checks the Users table and compiles info for messaging. Then composes messages, sends them, and updates the "Users" table field, alerted
 
-                        returns a list of tuples (contact_method, api_id, message) called messsage_info
+# 6 = Send_Reports_and_Archive - NOT DONE, may move to daily updates - Periodically send reports to manager/orgs & archive the alerts and reports to another database
 
-# 6 = Send_Notifications - NOT DONE - send the above messsages
-
-# 7 = Send_Reports_and_Archive - NOT DONE - Periodically send reports to manager/orgs & archive the alerts and reports to another database
-
-# 8 = Calculate next update time
+# 7 = Calculate next update time
 '''
 
 # Import the modules listed above
@@ -66,10 +61,9 @@ from modules import Call_APIs # 1
 from modules import Update_Sensor_Tables # 2
 from modules import Update_Alert_Tables # 3
 from modules import Update_POIs_and_Reports # 4
-#from modules import Update_Users_and_Compose_Messages # 5
-#from modules import Send_Notifications # 6
-#from modules import Send_Reports_and_Archive # 7
-from modules.Database.Queries import Sensor as sensor_query # 8
+from modules import Notify_and_Update_Users # 5
+#from modules import Send_Reports_and_Archive # 6 <- probably will move to the daily updates
+from modules.Database.Queries import Sensor as sensor_query # 7
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -83,7 +77,7 @@ def main(base_config, runtime, next_system_update):
     
     # ~~~~~~~~~~~~~~~~~~~~~
     
-    # 0) System Update? - Only sensors right now
+    # 0) System Update? - Only sensors/POIs right now
     
     if runtime > next_system_update:
         #pass
@@ -96,6 +90,7 @@ def main(base_config, runtime, next_system_update):
     sensors_df, sensor_types_updated = Call_APIs.workflow(runtime, base_config['TIMEZONE'])
 
     if len(sensors_df) > 0:
+    
         # 2) Update our database tables "Sensors" and "Sensor Type Information"
 
         Update_Sensor_Tables.workflow(sensors_df, sensor_types_updated, runtime)
@@ -110,30 +105,24 @@ def main(base_config, runtime, next_system_update):
 
         # 4) Workflow for updating our database tables "Places of Interest" and "Reports Archive"
 
-        poi_id_dict = Update_POIs_and_Reports.workflow(sensors_df, sensor_id_dict, ended_alert_ids, runtime, base_config)
+        reports_dict = Update_POIs_and_Reports.workflow(sensor_id_dict, ended_alert_ids, runtime, base_config)
         
-        print(poi_id_dict)
         
         if base_config['USERS'] == 'y':
         
-            pass
             # ~~~~~~~~~~~~~~~~~~~~~
 
-            # 5) Workflow for updating our database table "Users" and Compose messages to send
+            # 5) Workflow for updating our database table "Users" and Compose and send messages
 
-            #message_info = Update_Users_and_Compose_Messages.workflow(poi_id_dict)
-            
-            # ~~~~~~~~~~~~~~~~~~~~
-            
-            # 6) Workflow to send messages
+            Notify_and_Update_Users.workflow(reports_dict, base_config)
             
     # ~~~~~~~~~~~~~~~~~~~~
        
-    # 7) If it's time, send reports to manager/orgs and archive data somewhere
+    # ?) Probably moving this to daily updates - If it's time, send reports to manager/orgs and archive data somewhere
     
     # ~~~~~~~~~~~~~~~~~~~~
        
-    # 8) Get the next regular update time
+    # 6) Get the next regular update time
         
     next_regular_update = sensor_query.Get_next_regular_update(base_config['TIMEZONE'])
 

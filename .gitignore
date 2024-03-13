@@ -6,5 +6,5 @@
 **/.ipynb_checkpoints/*
 *.copy
 Testing.ipynb
-.env.Twilio
 .env
+.env.Twilio

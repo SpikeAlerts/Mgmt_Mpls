@@ -93,8 +93,8 @@ def Update_POIs_active(epsg_code):
     SET active = p.nearby_sensor
     FROM pois_w_no_nearby_sensors p
     WHERE pois.poi_id = p.poi_id;
-    ''').format(sql.Literal(int(epsg_code)),
-                sql.Literal(int(epsg_code))
+    ''').format(sql.Literal(float(epsg_code)),
+                sql.Literal(float(epsg_code))
                 )
 
     psql.send_update(cmd)

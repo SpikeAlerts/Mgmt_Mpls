@@ -90,7 +90,9 @@ def get_contacts(messaging_df):
         
         df = pd.read_csv(StringIO(r.text)) # Read as a dataframe
         
-        sorted_df = df.set_index('record_id').loc[api_ids] # Sort df by input record_ids
+        int_api_ids = [int(x) for x in api_ids]
+        
+        sorted_df = df.set_index('record_id').loc[int_api_ids] # Sort df by input record_ids
         
         contacts = list(sorted_df[fieldname]) # Extract contacts
         

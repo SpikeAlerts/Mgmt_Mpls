@@ -4,4 +4,4 @@ geopandas==0.14.0
 psycopg2-binary==2.9.7
 python-dotenv==1.0.0
 requests==2.31.0
-#twilio==8.9.1 # For the Twilio SMS Messaging extension
+twilio==8.9.1 # For the Twilio SMS Messaging extension
